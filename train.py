@@ -32,6 +32,7 @@ batch_size=32,
 input_size = 784,
 optimizer='nadam',
 learning_rate=0.001,
+loss_func = "crossentropy",
 activation_function='sigmoid',
 no_of_classes = 10,
 no_of_hidden_layers=3,
@@ -135,6 +136,18 @@ class NN:
     for i in range (y_hat.shape[0]):
       loss+=-(np.log2(y_hat[i][y_train[i]]))
     return loss/y_hat.shape[0]
+
+
+###############################################################
+
+
+  def squared_error(self, y_train, y_hat, no_of_classes):
+        loss = 0
+        y_onehot = self.one_hot_encoded(y_train, no_of_classes)
+        for i in range(y_hat.shape[0]):
+            loss += np.sum((y_hat[i] - y_onehot[i])**2)
+        return loss / y_train.shape[0]
+
 
 ###############################################################
 
@@ -253,7 +266,7 @@ class NN:
 ###############################################################
 
 
-  def gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, epochs):
+  def gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, epochs, loss_func):
     l = len(layers)
     loss_arr = []
     for ep in range(epochs):
@@ -266,14 +279,27 @@ class NN:
       # print(ac[len(ac)-1])
       # preac, ac = self.forward(x, layers)
       preac, ac = self.forward(x_train, layers)
-      loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      if loss_func.lower() == "crossentropy":
+        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      else:
+        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
       preac, ac = self.forward(x_test, layers)
-      loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      print("Iteration No : \t", ep+1, "\t Train Loss\t", loss_train)
-      print("Iteration No : \t", ep+1, "\t Validate Loss\t", loss_val)
+      if loss_func.lower() == "crossentropy":
+        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
+      else: 
+        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
+
+
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
+      print("Iteration No : \t\t", ep+1, "\t Train Loss\t\t", loss_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Loss\t\t", loss_val)
+      print("\n")
+      print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
+      print("---------------------------------------------------------")
+
       wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
@@ -283,7 +309,7 @@ class NN:
 ###############################################################
 
 
-  def batch_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, batch_size, n_iterations):
+  def batch_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, batch_size, n_iterations, loss_func):
     x_batch, y_batch = self.batch_converter(x_train, y_train, batch_size)
     loss_arr = []
     for i in range(n_iterations):
@@ -298,14 +324,26 @@ class NN:
           self.W[l] += -eta * grad_w[length-l-2]
           self.B[l] += -eta * grad_b[length-l-2]
       preac, ac = self.forward(x_train, layers)
-      loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      if loss_func.lower() == "crossentropy":
+        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      else:
+        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
       preac, ac = self.forward(x_test, layers)
-      loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      print("Iteration No : \t", i+1, "\t Train Loss\t", loss_train)
-      print("Iteration No : \t", i+1, "\t Validate Loss\t", loss_val)
+      if loss_func.lower() == "crossentropy":
+        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
+      else: 
+        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
+
+
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
+      print("Iteration No : \t\t", ep+1, "\t Train Loss\t\t", loss_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Loss\t\t", loss_val)
+      print("\n")
+      print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
+      print("---------------------------------------------------------")
       wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
@@ -314,7 +352,7 @@ class NN:
 ###############################################################
 
 
-  def momentum_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta):
+  def momentum_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func):
     l = len(layers)
     prev_w = [] 
     prev_b = [] 
@@ -336,14 +374,26 @@ class NN:
           self.W[i] += -eta*prev_w[i]
           self.B[i] += -eta*prev_b[i]
       preac, ac = self.forward(x_train, layers)
-      loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      if loss_func.lower() == "crossentropy":
+        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      else:
+        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
       preac, ac = self.forward(x_test, layers)
-      loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      print("Iteration No : \t", ep+1, "\t Train Loss\t", loss_train)
-      print("Iteration No : \t", ep+1, "\t Validate Loss\t", loss_val)
+      if loss_func.lower() == "crossentropy":
+        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
+      else: 
+        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
+
+
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
+      print("Iteration No : \t\t", ep+1, "\t Train Loss\t\t", loss_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Loss\t\t", loss_val)
+      print("\n")
+      print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
+      print("---------------------------------------------------------")
       wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
@@ -351,7 +401,7 @@ class NN:
 
 ###############################################################
 
-  def nesterov_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta):
+  def nesterov_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func):
     l = len(layers)
     prev_w = []
     prev_b = []
@@ -379,14 +429,26 @@ class NN:
           self.W[i] += -eta * prev_w[i]
           self.B[i] += -eta * prev_b[i]
       preac, ac = self.forward(x_train, layers)
-      loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      if loss_func.lower() == "crossentropy":
+        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      else:
+        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
       preac, ac = self.forward(x_test, layers)
-      loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      print("Iteration No : \t", ep+1, "\t Train Loss\t", loss_train)
-      print("Iteration No : \t", ep+1, "\t Validate Loss\t", loss_val)
+      if loss_func.lower() == "crossentropy":
+        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
+      else: 
+        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
+
+
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
+      print("Iteration No : \t\t", ep+1, "\t Train Loss\t\t", loss_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Loss\t\t", loss_val)
+      print("\n")
+      print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
+      print("---------------------------------------------------------")
       wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
@@ -396,7 +458,7 @@ class NN:
 ###############################################################
 
 
-  def rmsprop_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta):
+  def rmsprop_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func):
     l = len(layers)
     vw = []
     vb = []
@@ -419,14 +481,26 @@ class NN:
           self.W[i] =  self.W[i] - (eta * grad_w[l-i-2])/np.sqrt(vw[i] + eps)
           self.B[i] =  self.B[i] - (eta * grad_b[l-i-2])/np.sqrt(vb[i] + eps)
       preac, ac = self.forward(x_train, layers)
-      loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      if loss_func.lower() == "crossentropy":
+        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      else:
+        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
       preac, ac = self.forward(x_test, layers)
-      loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      print("Iteration No : \t", ep+1, "\t Train Loss\t", loss_train)
-      print("Iteration No : \t", ep+1, "\t Validate Loss\t", loss_val)
+      if loss_func.lower() == "crossentropy":
+        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
+      else: 
+        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
+
+
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
+      print("Iteration No : \t\t", ep+1, "\t Train Loss\t\t", loss_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Loss\t\t", loss_val)
+      print("\n")
+      print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
+      print("---------------------------------------------------------")
       wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
@@ -435,7 +509,7 @@ class NN:
 ###############################################################
 
 
-  def adam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2):
+  def adam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2, loss_func):
     l = len(layers)
     mw = []
     mb = []
@@ -469,14 +543,26 @@ class NN:
           self.W[i] = self.W[i] - (eta * mw_hat)/(np.sqrt(vw_hat) + eps)
           self.B[i] = self.B[i] - (eta * mb_hat)/(np.sqrt(vb_hat) + eps)
       preac, ac = self.forward(x_train, layers)
-      loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      if loss_func.lower() == "crossentropy":
+        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      else:
+        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
       preac, ac = self.forward(x_test, layers)
-      loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      print("Iteration No : \t", ep+1, "\t Train Loss\t", loss_train)
-      print("Iteration No : \t", ep+1, "\t Validate Loss\t", loss_val)
+      if loss_func.lower() == "crossentropy":
+        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
+      else: 
+        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
+
+
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
+      print("Iteration No : \t\t", ep+1, "\t Train Loss\t\t", loss_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Loss\t\t", loss_val)
+      print("\n")
+      print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
+      print("---------------------------------------------------------")
       wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
@@ -484,7 +570,7 @@ class NN:
 ###############################################################
 
 
-  def nadam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2):
+  def nadam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2, loss_func):
     l = len(layers)
     mw = []
     mb = []
@@ -518,14 +604,26 @@ class NN:
           self.W[i] = self.W[i] - (eta/(np.sqrt(vw[i]) + eps)) * (beta1 * mw_hat + (((1-beta1) * grad_w[l-i-2]) / (1 - np.power(beta1, j+1))))
           self.B[i] = self.B[i] - (eta/(np.sqrt(vb[i]) + eps)) * (beta1 * mb_hat + (((1-beta1) * grad_b[l-i-2]) / (1 - np.power(beta1, j+1))))
       preac, ac = self.forward(x_train, layers)
-      loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      if loss_func.lower() == "crossentropy":
+        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
+      else:
+        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
       preac, ac = self.forward(x_test, layers)
-      loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      print("Iteration No : \t", ep+1, "\t Train Loss\t", loss_train)
-      print("Iteration No : \t", ep+1, "\t Validate Loss\t", loss_val)
+      if loss_func.lower() == "crossentropy":
+        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
+      else: 
+        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
+
+
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
+      print("Iteration No : \t\t", ep+1, "\t Train Loss\t\t", loss_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Loss\t\t", loss_val)
+      print("\n")
+      print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
+      print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
+      print("---------------------------------------------------------")
       wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
     #   print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
@@ -559,7 +657,7 @@ class NN:
     plt.ylabel('Error')
     plt.show()
 
-def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimiser, activation_function, batch_size, eta, epoch,beta, beta1, beta2):
+def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimiser, activation_function, batch_size, eta, epoch,beta, beta1, beta2, loss_func):
     layers = []
     layers.append(input_size)
     for i in range(no_hidden_layers):
@@ -569,27 +667,28 @@ def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_la
     nn = NN(layers, wt_initialisation)
 
     if optimiser.lower() == "bgd":
-      nn.batch_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, eta, batch_size, epoch)
+      nn.batch_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, eta, batch_size, epoch, loss_func)
     elif optimiser.lower() == "vanillagd":
-      nn.gradient_descent(x_train, y_train,x_val, y_val, no_of_classes, layers, activation_function, eta, epoch)
+      nn.gradient_descent(x_train, y_train,x_val, y_val, no_of_classes, layers, activation_function, eta, epoch, loss_func)
     elif optimiser.lower() == "mgd":
-      nn.momentum_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta)
+      nn.momentum_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func)
     elif optimiser.lower() == "ngd":
-      nn.nesterov_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta)
+      nn.nesterov_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func)
 
     elif optimiser.lower() == "rmsprop":
-      nn.rmsprop_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta)
+      nn.rmsprop_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func)
       
     elif optimiser.lower() == "adam":
-      nn.adam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2)
+      nn.adam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func)
 
     elif optimiser.lower() == "nadam":
-      nn.nadam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2)
+      nn.nadam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func)
 
 epochs=config.epochs
 batch_size=config.batch_size
 optimizer=config.optimizer
 learning_rate = config.learning_rate
+loss_func = config.loss_func
 no_of_hidden_layers=config.no_of_hidden_layers
 hidden_layer_size=config.hidden_layer_size
 wt_initialisation=config.wt_initialisation
@@ -598,6 +697,6 @@ activation_function = config.activation_function
 no_of_classes = config.no_of_classes
 
 
-run.name='hl_'+str(no_of_hidden_layers)+'_bs_'+str(batch_size)+'_ac_'+activation_function
-main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs,beta, beta1, beta2)
+run.name='hl_'+str(no_of_hidden_layers)+'_bs_'+str(batch_size)+'_ac_'+activation_function+'_op_'+optimizer
+main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs,beta, beta1, beta2, loss_func)
 
