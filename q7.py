@@ -17,28 +17,7 @@ x_train = x_train.reshape(x_train.shape[0], -1)
 x_test = x_test.reshape(x_test.shape[0], -1)
 x_val = x_val.reshape(x_val.shape[0], -1)
 
-default_params=dict(
-epochs=10,
-batch_size=32,
-input_size = 784,
-optimizer='nadam',
-learning_rate=0.001,
-loss_func = "crossentropy",
-activation_function='sigmoid',
-no_of_classes = 10,
-no_of_hidden_layers=3,
-hidden_layer_size=128,
-wt_initialisation='Xavier',
-)
-#Global Variables
-beta = 0.9
-beta1 = 0.9
-beta2 = 0.999
 
-
-
-run=wandb.init(config=default_params,project='DeepLearning_Assignment1',entity='cs22m081',reinit='true')
-config=wandb.config
 
 print(x_val.shape)
 
@@ -117,8 +96,8 @@ class NN:
 
 ###############################################################
 
-  def one_hot_encoded(self, y, size):
-    return np.eye(size)[y]
+  def one_hot_encoded(self, y, no_of_classes):
+    return np.eye(no_of_classes)[y]
 
 ###############################################################
 
@@ -148,6 +127,16 @@ class NN:
       for j in range(a.shape[1]):
         c[i][j] = a[i][j] * b[i][j]
     return c
+
+###############################################################
+
+
+    def l2_regularize(self, lambd, batch_size):
+        acc = 0
+        for i in range(len(self.W)):
+            acc += np.sum(self.W[i] ** 2)
+        return (lambd * acc)/2
+
 
 ###############################################################
   def batch_converter(self, x, y, batch_size):
@@ -257,7 +246,7 @@ class NN:
 ###############################################################
 
 
-  def gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, epochs, loss_func):
+  def gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, epochs, loss_func, lambd, plot_conf_mat):
     l = len(layers)
     loss_arr = []
     for ep in range(epochs):
@@ -265,7 +254,7 @@ class NN:
       grad_w, grad_b = self.backward(layers, x_train, y_train, no_of_classes, preac, ac, activation_function)
 
       for i in range(l-1):
-        self.W[i] += -eta * grad_w[l-i-2]
+        self.W[i] += -(eta * grad_w[l-i-2] + (eta * lambd * self.W[i])/self.W[i].shape[0])
         self.B[i] += -eta * grad_b[l-i-2]
       # print(ac[len(ac)-1])
       # preac, ac = self.forward(x, layers)
@@ -291,16 +280,17 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
 
-    #   wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
-      # print("Accuracy\t", accur, "%")
-    # self.PlotError(loss_arr)
-
+      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+    if plot_conf_mat == True: 
+      y_pred = ac[len(ac)-1]
+      y_pred = np.argmax(y_pred, axis = 1)
+      self.Confunsion_Matrix_Plot(y_pred, y_test)
 
 
 ###############################################################
 
 
-  def batch_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, batch_size, n_iterations, loss_func):
+  def batch_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, batch_size, n_iterations, loss_func, lambd, plot_conf_mat):
     x_batch, y_batch = self.batch_converter(x_train, y_train, batch_size)
     loss_arr = []
     for i in range(n_iterations):
@@ -312,7 +302,7 @@ class NN:
         length = len(layers)
         for l in range(length-1):
           # print("shape",self.W[l].shape, grad_w[length-l-2].shape)
-          self.W[l] += -eta * grad_w[length-l-2]
+          self.W[l] += -(eta * grad_w[length-l-2] + (eta * lambd * self.W[i])/self.W[i].shape[0])
           self.B[l] += -eta * grad_b[length-l-2]
       preac, ac = self.forward(x_train, layers)
       if loss_func.lower() == "crossentropy":
@@ -324,8 +314,9 @@ class NN:
         loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
       else: 
         loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
-
-
+      
+      loss_train += l2_regularize(lambd, xb.shape[0])
+      loss_val += l2_regularize(lambd, xb.shape[0])
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
@@ -335,15 +326,17 @@ class NN:
       print("Iteration No : \t\t", i+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", i+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-    #   wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
-      # print("Accuracy\t", accur, "%")
-    # self.PlotError(loss_arr)
+      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+    if plot_conf_mat == True: 
+      y_pred = ac[len(ac)-1]
+      y_pred = np.argmax(y_pred, axis = 1)
+      self.Confunsion_Matrix_Plot(y_pred, y_test)
 
 
 ###############################################################
 
 
-  def momentum_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func):
+  def momentum_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func,lambd, plot_conf_mat):
     l = len(layers)
     prev_w = [] 
     prev_b = [] 
@@ -385,14 +378,16 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-    #   wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
-      # print("Accuracy\t", accur, "%")
-    # self.PlotError(loss_arr)
+      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+    if plot_conf_mat == True: 
+      y_pred = ac[len(ac)-1]
+      y_pred = np.argmax(y_pred, axis = 1)
+      self.Confunsion_Matrix_Plot(y_pred, y_test)
 
 
 ###############################################################
 
-  def nesterov_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func):
+  def nesterov_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func,lambd, plot_conf_mat):
     l = len(layers)
     prev_w = []
     prev_b = []
@@ -440,16 +435,18 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-    #   wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
-      # print("Accuracy\t", accur, "%")
-    # self.PlotError(loss_arr)
+      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+    if plot_conf_mat == True: 
+      y_pred = ac[len(ac)-1]
+      y_pred = np.argmax(y_pred, axis = 1)
+      self.Confunsion_Matrix_Plot(y_pred, y_test)
 
 
 
 ###############################################################
 
 
-  def rmsprop_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func):
+  def rmsprop_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func,lambd, plot_conf_mat):
     l = len(layers)
     vw = []
     vb = []
@@ -492,15 +489,16 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-    #   wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
-      # print("Accuracy\t", accur, "%")
-    # self.PlotError(loss_arr)
-
+      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+    if plot_conf_mat == True: 
+      y_pred = ac[len(ac)-1]
+      y_pred = np.argmax(y_pred, axis = 1)
+      self.Confunsion_Matrix_Plot(y_pred, y_test)
 
 ###############################################################
 
 
-  def adam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2, loss_func):
+  def adam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2, loss_func,lambd, plot_conf_mat):
     l = len(layers)
     mw = []
     mb = []
@@ -554,14 +552,16 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-    #   wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
-      # print("Accuracy\t", accur, "%")
-    # self.PlotError(loss_arr)
+      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+    if plot_conf_mat == True: 
+      y_pred = ac[len(ac)-1]
+      y_pred = np.argmax(y_pred, axis = 1)
+      self.Confunsion_Matrix_Plot(y_pred, y_test)
 
 ###############################################################
 
 
-  def nadam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2, loss_func):
+  def nadam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2, loss_func,lambd, plot_conf_mat):
     l = len(layers)
     mw = []
     mb = []
@@ -615,11 +615,12 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-    #   wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
-    #   print("Accuracy\t", accur, "%")
-    # self.PlotError(loss_arr)
+      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+    if plot_conf_mat == True: 
+      y_pred = ac[len(ac)-1]
+      y_pred = np.argmax(y_pred, axis = 1)
+      self.Confunsion_Matrix_Plot(y_pred, y_test)
     
-
 ###############################################################
 
   def test_accuracy(self, layers, x, y, activation_function):
@@ -647,43 +648,81 @@ class NN:
     plt.xlabel('No of Iterations')
     plt.ylabel('Error')
     plt.show()
+###############################################################
 
-def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimiser, activation_function, batch_size, eta, epoch,beta, beta1, beta2, loss_func):
-    layers = []
-    layers.append(input_size)
-    for i in range(no_hidden_layers):
-      layers.append(hidden_layer_size)
-    layers.append(no_of_classes)
-     
-    nn = NN(layers, wt_initialisation)
+  def Confunsion_Matrix_Plot(self, y_pred, y):
+    class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat', 'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
+    wandb.log({"Confunsion_Matrix_Plot ": wandb.plot.confusion_matrix(probs = None, y_true = y, preds = y_pred, class_names = class_names)})
+    from sklearn.metrics import confusion_matrix
+    cm = confusion_matrix(y_pred, y)
+    print(cm)
 
-    if optimiser.lower() == "bgd":
-      nn.batch_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, eta, batch_size, epoch, loss_func)
-    elif optimiser.lower() == "vanillagd":
-      nn.gradient_descent(x_train, y_train,x_val, y_val, no_of_classes, layers, activation_function, eta, epoch, loss_func)
-    elif optimiser.lower() == "mgd":
-      nn.momentum_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func)
-    elif optimiser.lower() == "ngd":
-      nn.nesterov_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func)
+def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimiser, activation_function, batch_size, eta, epoch,beta, beta1, beta2, loss_func, lambd, plot_conf_mat):
+  layers = []
+  layers.append(input_size)
+  for i in range(no_hidden_layers):
+    layers.append(hidden_layer_size)
+  layers.append(no_of_classes)
+    
+  nn = NN(layers, wt_initialisation)
 
-    elif optimiser.lower() == "rmsprop":
-      nn.rmsprop_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func)
-      
-    elif optimiser.lower() == "adam":
-      nn.adam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func)
+  if optimiser.lower() == "bgd":
+    nn.batch_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, eta, batch_size, epoch, loss_func, lambd, plot_conf_mat)
+  elif optimiser.lower() == "vanillagd":
+    nn.gradient_descent(x_train, y_train,x_val, y_val, no_of_classes, layers, activation_function, eta, epoch, loss_func, lambd, plot_conf_mat)
+  elif optimiser.lower() == "mgd":
+    nn.momentum_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd, plot_conf_mat)
+  elif optimiser.lower() == "ngd":
+    nn.nesterov_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd, plot_conf_mat)
 
-    elif optimiser.lower() == "nadam":
-      nn.nadam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func)
+  elif optimiser.lower() == "rmsprop":
+    nn.rmsprop_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd, plot_conf_mat)
+    
+  elif optimiser.lower() == "adam":
+    nn.adam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func, lambd, plot_conf_mat)
 
-epochs=10
-batch_size=1024
-optimizer="adam"
-learning_rate = 0.01
-loss_func = "crossentropy"
-no_of_hidden_layers = 2
-hidden_layer_size = 128
-wt_initialisation = "random"
-input_size = 784
-activation_function = "tanh"
-no_of_classes = 10
-main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs, beta, beta1, beta2, loss_func)
+  elif optimiser.lower() == "nadam":
+    nn.nadam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func, lambd,plot_conf_mat)
+
+
+default_params=dict(
+epochs=3,
+batch_size=32,
+input_size = 784,
+optimizer='nadam',
+learning_rate=0.001,
+loss_func = "crossentropy",
+activation_function='sigmoid',
+no_of_classes = 10,
+no_of_hidden_layers=3,
+hidden_layer_size=128,
+wt_initialisation='Xavier',
+plot_conf_mat = True,
+lambd = 0, 
+)
+#Global Variables
+beta = 0.9
+beta1 = 0.9
+beta2 = 0.999
+
+
+run=wandb.init(config=default_params,project='DeepLearning_Assignment1',entity='cs22m081',reinit='true')
+config=wandb.config
+run.name = "Plot Confusion Matrix"
+
+epochs=config.epochs
+batch_size=config.batch_size
+optimizer=config.optimizer
+learning_rate = config.learning_rate
+loss_func = config.loss_func
+no_of_hidden_layers=config.no_of_hidden_layers
+hidden_layer_size=config.hidden_layer_size
+wt_initialisation=config.wt_initialisation
+input_size=config.input_size
+activation_function = config.activation_function
+no_of_classes = config.no_of_classes
+lambd = config.lambd
+plot_conf_mat = config.plot_conf_mat
+
+main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs, beta, beta1, beta2, loss_func,lambd, plot_conf_mat)
+  

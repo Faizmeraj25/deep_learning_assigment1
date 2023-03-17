@@ -47,8 +47,8 @@ beta2 = 0.999
 
 
 
-run=wandb.init(config=default_params,project='DeepLearning_Assignment1',entity='cs22m081',reinit='true')
-config=wandb.config
+# run=wandb.init(config=default_params,project='DeepLearning_Assignment1',entity='cs22m081',reinit='true')
+# config=wandb.config
 
 print(x_val.shape)
 
@@ -122,6 +122,7 @@ class NN:
       sum=0
       for j in range(x.shape[1]):
         sum=sum+np.exp(x[i][j])
+      # print("sum ",sum)
       x[i]=np.exp(x[i])/sum
     return x
 
@@ -141,13 +142,12 @@ class NN:
 
 ###############################################################
 
-
   def squared_error(self, y_train, y_hat, no_of_classes):
-        loss = 0
-        y_onehot = self.one_hot_encoded(y_train, no_of_classes)
-        for i in range(y_hat.shape[0]):
-            loss += np.sum((y_hat[i] - y_onehot[i])**2)
-        return loss / y_train.shape[0]
+      loss = 0
+      y_onehot = self.one_hot_encoded(y_train, no_of_classes)
+      for i in range(y_hat.shape[0]):
+          loss += np.sum((y_hat[i] - y_onehot[i])**2)
+      return loss / y_train.shape[0]
 
 
 ###############################################################
@@ -161,12 +161,14 @@ class NN:
 
 ###############################################################
 
-
-    def l2_regularize(self, lambd, batch_size):
-        acc = 0
-        for i in range(len(self.W)):
-            acc += np.sum(self.W[i] ** 2)
-        return (lambd * acc)/2
+  def l2_regularize(self, lambd, batch_size):
+      acc = 0
+      for i in range(len(self.W)):
+        ppp = np.sum(self.W[i] ** 2)
+        # print(ppp,end=' ')
+        acc += ppp
+      # print("acc ", acc)
+      return (lambd/(2.* batch_size)) * acc
 
 
 ###############################################################
@@ -277,7 +279,7 @@ class NN:
 ###############################################################
 
 
-  def gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, epochs, loss_func, lambd):
+  def gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, epochs, loss_func, lambd, do_wandb_log):
     l = len(layers)
     loss_arr = []
     for ep in range(epochs):
@@ -310,8 +312,8 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-
-      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+      if do_wandb_log == True:
+        wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
 
@@ -320,7 +322,7 @@ class NN:
 ###############################################################
 
 
-  def batch_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, batch_size, n_iterations, loss_func, lambd):
+  def batch_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, eta, batch_size, n_iterations, loss_func, lambd, do_wandb_log):
     x_batch, y_batch = self.batch_converter(x_train, y_train, batch_size)
     loss_arr = []
     for i in range(n_iterations):
@@ -332,21 +334,23 @@ class NN:
         length = len(layers)
         for l in range(length-1):
           # print("shape",self.W[l].shape, grad_w[length-l-2].shape)
-          self.W[l] += -(eta * grad_w[length-l-2] + (eta * lambd * self.W[i])/self.W[i].shape[0])
+          self.W[l] += -(eta * grad_w[length-l-2] + eta * lambd * self.W[l])
           self.B[l] += -eta * grad_b[length-l-2]
       preac, ac = self.forward(x_train, layers)
       if loss_func.lower() == "crossentropy":
         loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
       else:
         loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
+      
+      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0]))
+      
       preac, ac = self.forward(x_test, layers)
       if loss_func.lower() == "crossentropy":
         loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
       else: 
         loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
       
-      loss_train += l2_regularize(lambd, xb.shape[0])
-      loss_val += l2_regularize(lambd, xb.shape[0])
+      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
@@ -356,7 +360,8 @@ class NN:
       print("Iteration No : \t\t", i+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", i+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+      if do_wandb_log == True:
+        wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
 
@@ -364,7 +369,7 @@ class NN:
 ###############################################################
 
 
-  def momentum_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func):
+  def momentum_grad_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func,lambd, do_wandb_log):
     l = len(layers)
     prev_w = [] 
     prev_b = [] 
@@ -383,19 +388,21 @@ class NN:
         for i in range(l-1):
           prev_w[i] = beta*prev_w[i] + grad_w[l-i-2]
           prev_b[i] = beta*prev_b[i] + grad_b[l-i-2]
-          self.W[i] += -eta*prev_w[i]
+          self.W[i] += -(eta*prev_w[i] + eta * lambd * self.W[i])
           self.B[i] += -eta*prev_b[i]
       preac, ac = self.forward(x_train, layers)
       if loss_func.lower() == "crossentropy":
         loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
       else:
         loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
+      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0])) 
       preac, ac = self.forward(x_test, layers)
       if loss_func.lower() == "crossentropy":
         loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
       else: 
         loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
 
+      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
 
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
@@ -406,14 +413,15 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+      if do_wandb_log == True:
+        wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
 
 
 ###############################################################
 
-  def nesterov_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func):
+  def nesterov_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func,lambd, do_wandb_log):
     l = len(layers)
     prev_w = []
     prev_b = []
@@ -438,19 +446,23 @@ class NN:
         for i in range(l-1):
           prev_w[i] = beta * prev_w[i] + grad_w[l-i-2]
           prev_b[i] = beta * prev_b[i] + grad_b[l-i-2]
-          self.W[i] += -eta * prev_w[i]
+          self.W[i] += -(eta * prev_w[i] + eta * lambd * self.W[i])
           self.B[i] += -eta * prev_b[i]
       preac, ac = self.forward(x_train, layers)
       if loss_func.lower() == "crossentropy":
         loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
       else:
         loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
+      
+      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0])) 
+      
       preac, ac = self.forward(x_test, layers)
       if loss_func.lower() == "crossentropy":
         loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
       else: 
         loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
-
+      
+      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
 
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
@@ -461,7 +473,8 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+      if do_wandb_log == True:
+        wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
 
@@ -470,7 +483,7 @@ class NN:
 ###############################################################
 
 
-  def rmsprop_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func):
+  def rmsprop_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta, loss_func,lambd, do_wandb_log):
     l = len(layers)
     vw = []
     vb = []
@@ -490,20 +503,24 @@ class NN:
         for i in range(l-1):
           vw[i] = beta * vw[i] + (1-beta) * grad_w[l-i-2] * grad_w[l-i-2]
           vb[i] = beta * vb[i] + (1-beta) * grad_b[l-i-2] * grad_b[l-i-2]
-          self.W[i] =  self.W[i] - (eta * grad_w[l-i-2])/np.sqrt(vw[i] + eps)
+          self.W[i] =  self.W[i] - (eta * grad_w[l-i-2])/np.sqrt(vw[i] + eps) - (eta * lambd * self.W[i])
           self.B[i] =  self.B[i] - (eta * grad_b[l-i-2])/np.sqrt(vb[i] + eps)
       preac, ac = self.forward(x_train, layers)
       if loss_func.lower() == "crossentropy":
         loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
       else:
         loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
+      
+      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0])) 
+      
       preac, ac = self.forward(x_test, layers)
       if loss_func.lower() == "crossentropy":
         loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
       else: 
         loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
 
-
+      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
+      
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
@@ -513,7 +530,8 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+      if do_wandb_log == True: 
+        wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
 
@@ -521,7 +539,7 @@ class NN:
 ###############################################################
 
 
-  def adam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2, loss_func):
+  def adam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2, loss_func,lambd, do_wandb_log):
     l = len(layers)
     mw = []
     mb = []
@@ -552,20 +570,23 @@ class NN:
           vw_hat = vw[i] / (1 - np.power(beta2, j+1))
           vb_hat = vb[i] / (1 - np.power(beta2, j+1))
 
-          self.W[i] = self.W[i] - (eta * mw_hat)/(np.sqrt(vw_hat) + eps)
+          self.W[i] = self.W[i] - (eta * mw_hat)/(np.sqrt(vw_hat) + eps)- (eta * lambd * self.W[i])
           self.B[i] = self.B[i] - (eta * mb_hat)/(np.sqrt(vb_hat) + eps)
       preac, ac = self.forward(x_train, layers)
       if loss_func.lower() == "crossentropy":
         loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
       else:
         loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
+      
+      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0])) 
+
       preac, ac = self.forward(x_test, layers)
       if loss_func.lower() == "crossentropy":
         loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
       else: 
         loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
 
-
+      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
@@ -575,14 +596,15 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+      if do_wandb_log == True: 
+        wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
 
 ###############################################################
 
 
-  def nadam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2, loss_func):
+  def nadam_gradient_descent(self, x_train, y_train, x_test, y_test, no_of_classes, layers, activation_function, batch_size, eta, epochs, beta1, beta2, loss_func,lambd, do_wandb_log):
     l = len(layers)
     mw = []
     mb = []
@@ -613,19 +635,23 @@ class NN:
           vw_hat = vw[i] / (1 - np.power(beta2, j+1))
           vb_hat = vb[i] / (1 - np.power(beta2, j+1))
 
-          self.W[i] = self.W[i] - (eta/(np.sqrt(vw[i]) + eps)) * (beta1 * mw_hat + (((1-beta1) * grad_w[l-i-2]) / (1 - np.power(beta1, j+1))))
+          self.W[i] = self.W[i] - (eta/(np.sqrt(vw[i]) + eps)) * (beta1 * mw_hat + (((1-beta1) * grad_w[l-i-2]) / (1 - np.power(beta1, j+1)))) - (eta * lambd * self.W[i])
           self.B[i] = self.B[i] - (eta/(np.sqrt(vb[i]) + eps)) * (beta1 * mb_hat + (((1-beta1) * grad_b[l-i-2]) / (1 - np.power(beta1, j+1))))
       preac, ac = self.forward(x_train, layers)
       if loss_func.lower() == "crossentropy":
         loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
       else:
         loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
+     
+      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0])) 
+      
       preac, ac = self.forward(x_test, layers)
       if loss_func.lower() == "crossentropy":
         loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
       else: 
         loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
 
+      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
 
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
@@ -636,7 +662,8 @@ class NN:
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
-      wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
+      if do_wandb_log == True:
+        wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
     #   print("Accuracy\t", accur, "%")
     # self.PlotError(loss_arr)
     
@@ -669,7 +696,7 @@ class NN:
     plt.ylabel('Error')
     plt.show()
 
-def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimiser, activation_function, batch_size, eta, epoch,beta, beta1, beta2, loss_func, lambd):
+def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimiser, activation_function, batch_size, eta, epoch,beta, beta1, beta2, loss_func, lambd, do_wandb_log):
     layers = []
     layers.append(input_size)
     for i in range(no_hidden_layers):
@@ -679,37 +706,96 @@ def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_la
     nn = NN(layers, wt_initialisation)
 
     if optimiser.lower() == "bgd":
-      nn.batch_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, eta, batch_size, epoch, loss_func, lambd)
+      nn.batch_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, eta, batch_size, epoch, loss_func, lambd, do_wandb_log)
     elif optimiser.lower() == "vanillagd":
-      nn.gradient_descent(x_train, y_train,x_val, y_val, no_of_classes, layers, activation_function, eta, epoch, loss_func, lambd)
+      nn.gradient_descent(x_train, y_train,x_val, y_val, no_of_classes, layers, activation_function, eta, epoch, loss_func, lambd, do_wandb_log)
     elif optimiser.lower() == "mgd":
-      nn.momentum_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd)
+      nn.momentum_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd, do_wandb_log)
     elif optimiser.lower() == "ngd":
-      nn.nesterov_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd)
+      nn.nesterov_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd, do_wandb_log)
 
     elif optimiser.lower() == "rmsprop":
-      nn.rmsprop_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd)
+      nn.rmsprop_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd, do_wandb_log)
       
     elif optimiser.lower() == "adam":
-      nn.adam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func, lambd)
+      nn.adam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func, lambd, do_wandb_log)
 
     elif optimiser.lower() == "nadam":
-      nn.nadam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func, lambd)
+      nn.nadam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func, lambd, do_wandb_log)
 
-epochs=config.epochs
-batch_size=config.batch_size
-optimizer=config.optimizer
-learning_rate = config.learning_rate
-loss_func = config.loss_func
-no_of_hidden_layers=config.no_of_hidden_layers
-hidden_layer_size=config.hidden_layer_size
-wt_initialisation=config.wt_initialisation
-input_size=config.input_size
-activation_function = config.activation_function
-no_of_classes = config.no_of_classes
-lambd = config.lambd
+# epochs=config.epochs
+# batch_size=config.batch_size
+# optimizer=config.optimizer
+# learning_rate = config.learning_rate
+# loss_func = config.loss_func
+# no_of_hidden_layers=config.no_of_hidden_layers
+# hidden_layer_size=config.hidden_layer_size
+# wt_initialisation=config.wt_initialisation
+# input_size=config.input_size
+# activation_function = config.activation_function
+# no_of_classes = config.no_of_classes
+# lambd = config.lambd
 
 
-run.name='hl_'+str(no_of_hidden_layers)+'_bs_'+str(batch_size)+'_ac_'+activation_function+'_op_'+optimizer+'_l_'+loss_func
-main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs,beta, beta1, beta2, loss_func, lambd)
+# run.name='hl_'+str(no_of_hidden_layers)+'_bs_'+str(batch_size)+'_ac_'+activation_function+'_op_'+optimizer+'_l_'+loss_func
+
+# main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs,beta, beta1, beta2, loss_func, lambd, do_wandb_log)
+
+
+
+do_wandb_log = False
+
+if do_wandb_log == True: 
+  default_params=dict(
+  epochs=10,
+  batch_size=32,
+  input_size = 784,
+  optimizer='nadam',
+  learning_rate=0.001,
+  loss_func = "crossentropy",
+  activation_function='sigmoid',
+  no_of_classes = 10,
+  no_of_hidden_layers=3,
+  hidden_layer_size=128,
+  wt_initialisation='Xavier',
+  lambd = 0
+  )
+  run=wandb.init(config=default_params,project='DeepLearning_Assignment1',entity='cs22m081',reinit='true')
+  config=wandb.config
+
+  epochs=config.epochs
+  batch_size=config.batch_size
+  optimizer=config.optimizer
+  learning_rate = config.learning_rate
+  loss_func = config.loss_func
+  no_of_hidden_layers=config.no_of_hidden_layers
+  hidden_layer_size=config.hidden_layer_size
+  wt_initialisation=config.wt_initialisation
+  input_size=config.input_size
+  activation_function = config.activation_function
+  no_of_classes = config.no_of_classes
+  lambd = config.lambd
+
+  run.name='hl_'+str(no_of_hidden_layers)+'_bs_'+str(batch_size)+'_ac_'+activation_function+'_op_'+optimizer+'_l_'+loss_func
+  main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs,beta, beta1, beta2, loss_func, lambd, do_wandb_log)
+
+else:
+  epochs = 10
+  batch_size = 32
+  input_size = 784
+  optimizer = 'nadam'
+  learning_rate = 0.001
+  beta = 0.001
+  loss_func = "crossentropy"
+  activation_function ='sigmoid'
+  no_of_classes = 10
+  no_of_hidden_layers = 1
+  hidden_layer_size = 128
+  wt_initialisation = 'Xavier'
+  lambd = 0.5
+  main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs,beta, beta1, beta2, loss_func, lambd, do_wandb_log)
+
+
+  
+
 
