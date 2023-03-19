@@ -8,49 +8,86 @@ Original file is located at
 """
 
 # pip install wandb
+dataset = "fashion_mnist"
+#-------------------------Implementing AgrParser-------------------------------------------------------
+# python train.py -wp DeepLearning_Assignment1 -we cs22m081 -d fashion_mnist -e 5 -b 32 -l mean_squared_error -o adam -lr 0.001 -m 0.9 -beta 0.9 -beta1 0.9 -beta2 0.999 -w_d 0.0005 -w_i random -nhl 3 -sz 128 -a ReLU -cl 10
+import argparse
+
+parser = argparse.ArgumentParser(description="Stores all the hyperpamaters for the model.")
+parser.add_argument("-wp", "--wandb_project",type=str, default="DeepLearning_Assignment1", help="Enter the Name of your Wandb Project")
+parser.add_argument("-we", "--wandb_entity",type=str, default="cs22m081", help="Wandb Entity used to track experiments in the Weights & Biases dashboard.")
+parser.add_argument("-d", "--dataset", default="fashion_mnist",type=str,choices=["mnist","fashion_mnist"])
+parser.add_argument("-e", "--epochs",default="1", type=int, help="Number of epochs to train neural network.")
+parser.add_argument("-b", "--batch_size",default="4", type=int, help="Batch size used to train neural network.")
+parser.add_argument("-l", "--loss",default="cross_entropy", type=str,choices=["mean_squared_error", "cross_entropy"], help="Loss function to compute the loss.")
+parser.add_argument("-o", "--optimizer",default="sgd", type=str, choices= ["sgd", "momentum", "nag", "rmsprop", "adam", "nadam"])
+parser.add_argument("-lr", "--learning_rate",default="0.01", type=float, help="Learning rate used to optimize model parameters")
+parser.add_argument("-m", "--momentum",default="0.04", type=float, help="Momentum used by momentum and nag optimizers.")
+parser.add_argument("-beta", "--beta",default="0.5", type=float, help="Beta used by rmsprop optimizer")
+parser.add_argument("-beta1", "--beta1",default="0.5", type=float, help="Beta1 used by adam and nadam optimizers.")
+parser.add_argument("-beta2", "--beta2",default="0.5", type=float, help="Beta2 used by adam and nadam optimizers.")
+parser.add_argument("-eps", "--epsilon",default="0.000001", type=float, help="Epsilon used by optimizers.")
+parser.add_argument("-w_d", "--weight_decay",default="0.0", type=float, help="Weight decay used by optimizers.")
+parser.add_argument("-w_i", "--weight_init",default="random", type=str,choices=["random", "Xavier"])
+parser.add_argument("-nhl", "--num_layers",default="1", type=int, help="Number of hidden layers used in feedforward neural network.")
+parser.add_argument("-sz", "--hidden_size",default="4", type=int, help="Number of hidden neurons in a feedforward layer.")
+parser.add_argument("-cl", "--num_classes",default="10", type=int, help="Number of nuerons in the output layer.")
+parser.add_argument("-a", "--activation",default="sigmoid", type=str, choices=["identity", "sigmoid", "tanh", "ReLU"])
+
+args = parser.parse_args()
+
+wandb_project = args.wandb_project
+wandb_entity = args.wandb_entity
+dataset = args.dataset
+epochs = args.epochs
+batch_size = args.batch_size
+loss_func = args.loss
+optimizer = args.optimizer
+learning_rate = args.learning_rate
+momentum = args.momentum
+beta = args.beta
+beta1 = args.beta1
+beta2 = args.beta2
+# epsilon = args.epsilon
+lambd = args.weight_decay
+wt_initialisation = args.weight_init
+no_of_hidden_layers = args.num_layers
+hidden_layer_size = args.hidden_size
+activation_function = args.activation
+no_of_classes = args.num_classes
+# print("wandb_project :", wandb_project , "wandb_entity: ", wandb_entity,"dataset: ",dataset,"epochs: ",epochs,"batch_size: ",batch_size,"loss_func", loss_func,"optimizer",  optimizer ,"learning_rate: ", learning_rate,"momentum: ", momentum, "beta: ",beta, "beta1:", beta1,"beta2: ", beta2, "lambd: ", lambd,"no_of_hidden_layers:", no_of_hidden_layers, "activation_function: ", activation_function,"no_of_classes: ", no_of_classes)
+
 
 import numpy as np 
 import pandas as pd
 import math
 import matplotlib.pyplot as plt
 import wandb
-from keras.datasets import fashion_mnist
+print("Loading Data...")
+if dataset == "fashion_mnist":
+  from keras.datasets import fashion_mnist
+  (x_train, y_train), (x_test, y_test) = fashion_mnist.load_data()
+else: 
+  from keras.datasets import mnist
+  (x_train, y_train), (x_test, y_test) = mnist.load_data()
+
 from sklearn.model_selection import train_test_split
-import tensorflow as tf
-(x_train, y_train), (x_test, y_test) = fashion_mnist.load_data()
 x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.1)
 
+print(f'{dataset.upper()} Dataset Loaded !!')
 x_train = x_train / 255
 x_test = x_test / 255
+x_val = x_val / 255
 x_train = x_train.reshape(x_train.shape[0], -1)
 x_test = x_test.reshape(x_test.shape[0], -1)
 x_val = x_val.reshape(x_val.shape[0], -1)
 
-default_params=dict(
-epochs=10,
-batch_size=32,
-input_size = 784,
-optimizer='nadam',
-learning_rate=0.001,
-loss_func = "crossentropy",
-activation_function='sigmoid',
-no_of_classes = 10,
-no_of_hidden_layers=3,
-hidden_layer_size=128,
-wt_initialisation='Xavier',
-lambd = 0
-)
 #Global Variables
 beta = 0.9
 beta1 = 0.9
 beta2 = 0.999
+input_size = x_test.shape[1]
 
-
-
-# run=wandb.init(config=default_params,project='DeepLearning_Assignment1',entity='cs22m081',reinit='true')
-# config=wandb.config
-
-print(x_val.shape)
 
 class NN: 
   # instantiate the weights and biases with random numbers. 
@@ -79,12 +116,25 @@ class NN:
   def normalize(self, x):
     for i in range(x.shape[0]):
       argmax = np.argmax(x[i])
+      argmin = np.argmin(x[i])
       maxval = x[i][argmax]
-      x[i] = (x[i])/(maxval)
+      minval = x[i][argmin]
+      x[i] = (x[i] )/(maxval)
     return x
 ###############################################################
 
   def sigmoid(self, x): 
+    # for i in range(x.shape[0]):
+    #   argmax = np.argmax(x[i])
+    #   maxval = x[i][argmax]
+    #   x[i] = x[i] - maxval
+    # for i in range(x.shape[0]): 
+    #   for j in range(x.shape[1]):
+    #     if x[i][j] < 0:
+    #       x[i][j] = np.exp(x[i][j])/(1+np.exp(x[i][j]))
+    #     else:
+    #       x[i][j] = 1 / (1 + np.exp(-x[i][j]))
+    # return x
     return 1/(1 + np.exp(-x))
 
 ###############################################################
@@ -118,13 +168,26 @@ class NN:
 ###############################################################
 
   def softmax(self, x):
+    # print("X",x)
+    # x = self.normalize(x)
     for i in range(x.shape[0]):
       sum=0
+      argmax = np.argmax(x[i])
+      maxval = x[i][argmax]
+      # x[i] = x[i] - maxval
       for j in range(x.shape[1]):
-        sum=sum+np.exp(x[i][j])
+        sum=sum+np.exp(x[i][j]-maxval)
       # print("sum ",sum)
-      x[i]=np.exp(x[i])/sum
+      x[i]=np.exp(x[i]-maxval)/sum
+    # x = np.exp(x)/np.sum(np.exp(x), axis=0)
+    # print("After",x)
     return x
+
+###############################################################
+
+  def softmax_derivative(self, x):
+    v = self.softmax(x) 
+    return v * (1 - v)
 
 ###############################################################
 
@@ -149,6 +212,15 @@ class NN:
           loss += np.sum((y_hat[i] - y_onehot[i])**2)
       return loss / y_train.shape[0]
 
+###############################################################
+  def loss_function(self, y_train, y_hat, no_of_classes, loss_func, lambd):
+    loss = self.l2_regularize(lambd, y_train.shape[0])
+    if loss_func.lower() == "cross_entropy":
+      loss += self.cross_entropy(y_train, y_hat)
+    else:
+      loss += self.squared_error(y_train, y_hat, no_of_classes)
+    return loss
+    
 
 ###############################################################
 
@@ -164,10 +236,7 @@ class NN:
   def l2_regularize(self, lambd, batch_size):
       acc = 0
       for i in range(len(self.W)):
-        ppp = np.sum(self.W[i] ** 2)
-        # print(ppp,end=' ')
-        acc += ppp
-      # print("acc ", acc)
+        acc += np.sum(self.W[i] ** 2)
       return (lambd/(2.* batch_size)) * acc
 
 
@@ -195,7 +264,7 @@ class NN:
 
 ###############################################################
 
-  def forward(self, input, size, activation_function = "sigmoid"):
+  def forward(self, input, size, activation_function):
     # Calculating for the hiddlen layers
     for i in range(len(size)-2):
       Y = np.dot(input, self.W[i].T)   + self.B[i]
@@ -240,14 +309,18 @@ class NN:
 ###############################################################
 
 
-  def backward(self, layers, x, y ,no_of_classes, preac, ac, activation_function="sigmoid"):
+  def backward(self, layers, x, y ,no_of_classes, preac, ac, activation_function, loss_func):
     no_layers = len(layers)
     grad_a = [] 
     grad_w = []
     grad_b = []
     grad_h = []
     y_onehot = self.one_hot_encoded(y, no_of_classes)
-    grad_a.append(-(y_onehot - ac[len(ac)-1]))
+    if loss_func.lower() == "cross_entropy":
+      grad_a.append(-(y_onehot - ac[len(ac)-1]))
+    else: #MSE
+      grad_a.append((ac[len(ac)-1] - y_onehot) * self.softmax_derivative(ac[len(ac)-1]))#ac[len(ac)-1]*(1 - ac[len(ac)-1])) 
+    # grad_a.append(-(y_onehot - ac[len(ac)-1]))
 
     for i in range(no_layers-2, -1, -1):
       if i == 0:
@@ -284,20 +357,20 @@ class NN:
     loss_arr = []
     for ep in range(epochs):
       preac, ac = self.forward(x_train, layers, activation_function)
-      grad_w, grad_b = self.backward(layers, x_train, y_train, no_of_classes, preac, ac, activation_function)
+      grad_w, grad_b = self.backward(layers, x_train, y_train, no_of_classes, preac, ac, activation_function, loss_func)
 
       for i in range(l-1):
         self.W[i] += -(eta * grad_w[l-i-2] + (eta * lambd * self.W[i])/self.W[i].shape[0])
         self.B[i] += -eta * grad_b[l-i-2]
       # print(ac[len(ac)-1])
       # preac, ac = self.forward(x, layers)
-      preac, ac = self.forward(x_train, layers)
-      if loss_func.lower() == "crossentropy":
+      preac, ac = self.forward(x_train, layers, activation_function)
+      if loss_func.lower() == "cross_entropy":
         loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
       else:
         loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
-      preac, ac = self.forward(x_test, layers)
-      if loss_func.lower() == "crossentropy":
+      preac, ac = self.forward(x_test, layers, activation_function)
+      if loss_func.lower() == "cross_entropy":
         loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
       else: 
         loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
@@ -330,27 +403,18 @@ class NN:
         xb = x_batch[j]
         yb = y_batch[j]
         preac, ac = self.forward(xb, layers, activation_function)
-        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes,preac, ac, activation_function)
+        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes,preac, ac, activation_function, loss_func)
         length = len(layers)
         for l in range(length-1):
           # print("shape",self.W[l].shape, grad_w[length-l-2].shape)
           self.W[l] += -(eta * grad_w[length-l-2] + eta * lambd * self.W[l])
           self.B[l] += -eta * grad_b[length-l-2]
-      preac, ac = self.forward(x_train, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
-      else:
-        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
+      preac, ac = self.forward(x_train, layers, activation_function)
+      loss_train = self.loss_function(y_train, ac[len(ac)-1], no_of_classes, loss_func, lambd)
       
-      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0]))
-      
-      preac, ac = self.forward(x_test, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      else: 
-        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
-      
-      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
+      preac, ac = self.forward(x_test, layers, activation_function )
+      loss_val = self.loss_function(y_test, ac[len(ac)-1], no_of_classes, loss_func, lambd)
+
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
@@ -384,35 +448,28 @@ class NN:
         xb = x_batch[j]
         yb = y_batch[j]
         preac, ac = self.forward(xb, layers, activation_function)
-        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes, preac, ac, activation_function)
+        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes, preac, ac, activation_function, loss_func)
         for i in range(l-1):
           prev_w[i] = beta*prev_w[i] + grad_w[l-i-2]
           prev_b[i] = beta*prev_b[i] + grad_b[l-i-2]
           self.W[i] += -(eta*prev_w[i] + eta * lambd * self.W[i])
           self.B[i] += -eta*prev_b[i]
-      preac, ac = self.forward(x_train, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
-      else:
-        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
-      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0])) 
-      preac, ac = self.forward(x_test, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      else: 
-        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
-
-      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
-
+      preac, ac = self.forward(x_train, layers, activation_function)
+      loss_train = self.loss_function(y_train, ac[len(ac)-1], no_of_classes, loss_func, lambd)
+      
+      preac, ac = self.forward(x_test, layers, activation_function)
+      loss_val = self.loss_function(y_test, ac[len(ac)-1], no_of_classes, loss_func, lambd)
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
+
       print("Iteration No : \t\t", ep+1, "\t Train Loss\t\t", loss_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Loss\t\t", loss_val)
       print("\n")
       print("Iteration No : \t\t", ep+1, "\t Train Accuracy\t\t", accur_train)
       print("Iteration No : \t\t", ep+1, "\t Validate Accuracy\t\t", accur_val)
       print("---------------------------------------------------------")
+      
       if do_wandb_log == True:
         wandb.log({"train_accuracy":accur_train,"train_error":loss_train,"val_accuracy":accur_val,"val_error":loss_val})
       # print("Accuracy\t", accur, "%")
@@ -436,33 +493,22 @@ class NN:
       for j in range(len(x_batch)):
         xb = x_batch[j]
         yb = y_batch[j]
-        # print("y_hat", ac[len(ac)-1])
         for i in range(l-1):
           self.W[i] += -beta * prev_w[i]
           self.B[i] += -beta * prev_b[i]
         preac, ac = self.forward(xb, layers, activation_function)
-        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes, preac, ac, activation_function)
+        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes, preac, ac, activation_function, loss_func)
         # print("grad_w", grad_w)
         for i in range(l-1):
           prev_w[i] = beta * prev_w[i] + grad_w[l-i-2]
           prev_b[i] = beta * prev_b[i] + grad_b[l-i-2]
           self.W[i] += -(eta * prev_w[i] + eta * lambd * self.W[i])
           self.B[i] += -eta * prev_b[i]
-      preac, ac = self.forward(x_train, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
-      else:
-        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
+      preac, ac = self.forward(x_train, layers, activation_function)
+      loss_train = self.loss_function(y_train, ac[len(ac)-1], no_of_classes, loss_func, lambd)
       
-      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0])) 
-      
-      preac, ac = self.forward(x_test, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      else: 
-        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
-      
-      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
+      preac, ac = self.forward(x_test, layers, activation_function)
+      loss_val = self.loss_function(y_test, ac[len(ac)-1], no_of_classes, loss_func, lambd)
 
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
@@ -499,27 +545,17 @@ class NN:
         xb = x_batch[j]
         yb = y_batch[j]
         preac, ac = self.forward(xb, layers, activation_function)
-        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes, preac, ac, activation_function)
+        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes, preac, ac, activation_function, loss_func)
         for i in range(l-1):
           vw[i] = beta * vw[i] + (1-beta) * grad_w[l-i-2] * grad_w[l-i-2]
           vb[i] = beta * vb[i] + (1-beta) * grad_b[l-i-2] * grad_b[l-i-2]
           self.W[i] =  self.W[i] - (eta * grad_w[l-i-2])/np.sqrt(vw[i] + eps) - (eta * lambd * self.W[i])
           self.B[i] =  self.B[i] - (eta * grad_b[l-i-2])/np.sqrt(vb[i] + eps)
-      preac, ac = self.forward(x_train, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
-      else:
-        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
-      
-      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0])) 
-      
-      preac, ac = self.forward(x_test, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      else: 
-        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
+      preac, ac = self.forward(x_train, layers, activation_function)
+      loss_train = self.loss_function(y_train, ac[len(ac)-1], no_of_classes, loss_func, lambd)
 
-      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
+      preac, ac = self.forward(x_test, layers, activation_function)
+      loss_val = self.loss_function(y_test, ac[len(ac)-1], no_of_classes, loss_func, lambd)
       
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
@@ -558,7 +594,7 @@ class NN:
         xb = x_batch[j]
         yb = y_batch[j]
         preac, ac = self.forward(xb, layers, activation_function)
-        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes, preac, ac, activation_function)
+        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes, preac, ac, activation_function, loss_func)
         for i in range(l-1):
           mw[i] = beta1 * mw[i] + (1-beta1) * grad_w[l-i-2]
           mb[i] = beta1 * mb[i] + (1-beta1) * grad_b[l-i-2]
@@ -572,21 +608,12 @@ class NN:
 
           self.W[i] = self.W[i] - (eta * mw_hat)/(np.sqrt(vw_hat) + eps)- (eta * lambd * self.W[i])
           self.B[i] = self.B[i] - (eta * mb_hat)/(np.sqrt(vb_hat) + eps)
-      preac, ac = self.forward(x_train, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
-      else:
-        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
-      
-      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0])) 
+      preac, ac = self.forward(x_train, layers, activation_function)
+      loss_train = self.loss_function(y_train, ac[len(ac)-1], no_of_classes, loss_func, lambd)
 
-      preac, ac = self.forward(x_test, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      else: 
-        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
+      preac, ac = self.forward(x_test, layers, activation_function)
+      loss_val = self.loss_function(y_test, ac[len(ac)-1], no_of_classes, loss_func, lambd)
 
-      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
       accur_val = self.test_accuracy(layers, x_test, y_test, activation_function)
@@ -623,7 +650,7 @@ class NN:
         xb = x_batch[j]
         yb = y_batch[j]
         preac, ac = self.forward(xb, layers, activation_function)
-        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes, preac, ac, activation_function)
+        grad_w, grad_b = self.backward(layers, xb, yb, no_of_classes, preac, ac, activation_function, loss_func)
         for i in range(l-1): 
           mw[i] = beta1 * mw[i] + (1-beta1)* grad_w[l-i-2]
           mb[i] = beta1 * mb[i] + (1-beta1)* grad_b[l-i-2]
@@ -637,21 +664,11 @@ class NN:
 
           self.W[i] = self.W[i] - (eta/(np.sqrt(vw[i]) + eps)) * (beta1 * mw_hat + (((1-beta1) * grad_w[l-i-2]) / (1 - np.power(beta1, j+1)))) - (eta * lambd * self.W[i])
           self.B[i] = self.B[i] - (eta/(np.sqrt(vb[i]) + eps)) * (beta1 * mb_hat + (((1-beta1) * grad_b[l-i-2]) / (1 - np.power(beta1, j+1))))
-      preac, ac = self.forward(x_train, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_train = self.cross_entropy(y_train, ac[len(ac)-1])
-      else:
-        loss_train = self.squared_error(y_train, ac[len(ac)-1], no_of_classes)
-     
-      loss_train = (loss_train +self.l2_regularize(lambd, y_train.shape[0])) 
-      
-      preac, ac = self.forward(x_test, layers)
-      if loss_func.lower() == "crossentropy":
-        loss_val = self.cross_entropy(y_test, ac[len(ac)-1])
-      else: 
-        loss_val = self.squared_error(y_test, ac[len(ac)-1], no_of_classes)
+      preac, ac = self.forward(x_train, layers, activation_function)
+      loss_train = self.loss_function(y_train, ac[len(ac)-1], no_of_classes, loss_func, lambd)
 
-      loss_val = (loss_val + self.l2_regularize(lambd, y_test.shape[0]))
+      preac, ac = self.forward(x_test, layers, activation_function)
+      loss_val = self.loss_function(y_test, ac[len(ac)-1], no_of_classes, loss_func, lambd)
 
       loss_arr.append(loss_val)
       accur_train = self.test_accuracy(layers, x_train, y_train, activation_function)
@@ -696,7 +713,7 @@ class NN:
     plt.ylabel('Error')
     plt.show()
 
-def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimiser, activation_function, batch_size, eta, epoch,beta, beta1, beta2, loss_func, lambd, do_wandb_log):
+def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimiser, activation_function, batch_size, eta, epoch, momentum, beta, beta1, beta2, loss_func, lambd, do_wandb_log):
     layers = []
     layers.append(input_size)
     for i in range(no_hidden_layers):
@@ -704,15 +721,14 @@ def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_la
     layers.append(no_of_classes)
      
     nn = NN(layers, wt_initialisation)
-
-    if optimiser.lower() == "bgd":
+    if optimiser.lower() == "sgd":
       nn.batch_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, eta, batch_size, epoch, loss_func, lambd, do_wandb_log)
     elif optimiser.lower() == "vanillagd":
       nn.gradient_descent(x_train, y_train,x_val, y_val, no_of_classes, layers, activation_function, eta, epoch, loss_func, lambd, do_wandb_log)
-    elif optimiser.lower() == "mgd":
-      nn.momentum_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd, do_wandb_log)
-    elif optimiser.lower() == "ngd":
-      nn.nesterov_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd, do_wandb_log)
+    elif optimiser.lower() == "momentum":
+      nn.momentum_grad_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, momentum, loss_func, lambd, do_wandb_log)
+    elif optimiser.lower() == "nag":
+      nn.nesterov_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, momentum, loss_func, lambd, do_wandb_log)
 
     elif optimiser.lower() == "rmsprop":
       nn.rmsprop_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta, loss_func, lambd, do_wandb_log)
@@ -723,44 +739,34 @@ def main(x_train, y_train, x_val, y_val, input_size, no_hidden_layers, hidden_la
     elif optimiser.lower() == "nadam":
       nn.nadam_gradient_descent(x_train, y_train, x_val, y_val, no_of_classes, layers, activation_function, batch_size, eta, epoch, beta1, beta2, loss_func, lambd, do_wandb_log)
 
-# epochs=config.epochs
-# batch_size=config.batch_size
-# optimizer=config.optimizer
-# learning_rate = config.learning_rate
-# loss_func = config.loss_func
-# no_of_hidden_layers=config.no_of_hidden_layers
-# hidden_layer_size=config.hidden_layer_size
-# wt_initialisation=config.wt_initialisation
-# input_size=config.input_size
-# activation_function = config.activation_function
-# no_of_classes = config.no_of_classes
-# lambd = config.lambd
 
 
-# run.name='hl_'+str(no_of_hidden_layers)+'_bs_'+str(batch_size)+'_ac_'+activation_function+'_op_'+optimizer+'_l_'+loss_func
+# To run the Sweep set do_wandb_log = True
+# To run it using command set do_wandb_log = False 
 
-# main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs,beta, beta1, beta2, loss_func, lambd, do_wandb_log)
+# If do_wandb_log = False, To run using command set run_from_command = True else Hardcode the values from Line No 812.
+do_wandb_log = True
+run_from_command = True
 
 
+if do_wandb_log == True:
 
-do_wandb_log = False
-
-if do_wandb_log == True: 
   default_params=dict(
   epochs=10,
   batch_size=32,
   input_size = 784,
   optimizer='nadam',
   learning_rate=0.001,
-  loss_func = "crossentropy",
+  loss_func = "cross_entropy",
   activation_function='sigmoid',
   no_of_classes = 10,
   no_of_hidden_layers=3,
   hidden_layer_size=128,
   wt_initialisation='Xavier',
-  lambd = 0
+  lambd = 0, 
+  momentum = 0.05,
   )
-  run=wandb.init(config=default_params,project='DeepLearning_Assignment1',entity='cs22m081',reinit='true')
+  run=wandb.init(config=default_params,project=wandb_project,entity=wandb_entity,reinit='true')
   config=wandb.config
 
   epochs=config.epochs
@@ -775,25 +781,35 @@ if do_wandb_log == True:
   activation_function = config.activation_function
   no_of_classes = config.no_of_classes
   lambd = config.lambd
+  momentum = config.momentum
 
-  run.name='hl_'+str(no_of_hidden_layers)+'_bs_'+str(batch_size)+'_ac_'+activation_function+'_op_'+optimizer+'_l_'+loss_func
-  main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs,beta, beta1, beta2, loss_func, lambd, do_wandb_log)
+  run.name='hl_'+str(no_of_hidden_layers)+'_bs_'+str(batch_size)+'_ac_'+activation_function+'_op_'+optimizer+'_l_'+loss_func+'_wd_'+str(lambd)+'_m_'+str(momentum)
+  print("epochs: ",epochs,"| batch_size: ",batch_size,"| loss_func", loss_func,"| optimizer",  optimizer ,"| learning_rate: ", learning_rate,"| momentum", momentum, "| beta: ",beta, "| beta1:", beta1,"| beta2: ", beta2, "| lambd: ", lambd,"| no_of_hidden_layers:", no_of_hidden_layers, "| activation_function: ", activation_function,"| no_of_classes: ", no_of_classes)
+  main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs, momentum, beta, beta1, beta2, loss_func, lambd, do_wandb_log)
 
 else:
-  epochs = 10
-  batch_size = 32
-  input_size = 784
-  optimizer = 'nadam'
-  learning_rate = 0.001
-  beta = 0.001
-  loss_func = "crossentropy"
-  activation_function ='sigmoid'
-  no_of_classes = 10
-  no_of_hidden_layers = 1
-  hidden_layer_size = 128
-  wt_initialisation = 'Xavier'
-  lambd = 0.5
-  main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs,beta, beta1, beta2, loss_func, lambd, do_wandb_log)
+  if run_from_command == False:
+    #Set the Require Parameters here
+    epochs = 4
+    batch_size = 1024
+    input_size = 784
+    # "sgd", "momentum", "nag", "rmsprop", "adam", "nadam"
+    optimizer = 'nag'
+    learning_rate = 0.001
+    beta = 0.01
+    # "mean_squared_error", "cross_entropy"
+    loss_func = "mse"
+    # "identity", "sigmoid", "tanh", "ReLU"
+    activation_function ='tanh'
+    no_of_classes = 10
+    no_of_hidden_layers = 3
+    hidden_layer_size = 128
+    # "random", "Xavier"
+    wt_initialisation = 'Xavier'
+    lambd = 0
+    momentum = 0.05
+  print("epochs: ",epochs,"| batch_size: ",batch_size,"| loss_func", loss_func,"| optimizer",  optimizer ,"| learning_rate: ", learning_rate,"| momentum", momentum, "| beta: ",beta, "| beta1:", beta1,"| beta2: ", beta2, "| lambd: ", lambd,"| no_of_hidden_layers:", no_of_hidden_layers, "| activation_function: ", activation_function,"| no_of_classes: ", no_of_classes)
+  main(x_train, y_train, x_val, y_val, input_size, no_of_hidden_layers, hidden_layer_size, no_of_classes, wt_initialisation, optimizer, activation_function, batch_size, learning_rate, epochs, momentum, beta, beta1, beta2, loss_func, lambd, do_wandb_log)
 
 
   
